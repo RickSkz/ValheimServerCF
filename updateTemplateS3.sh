@@ -1,0 +1,1 @@
+aws s3 cp 'C:/Users/rikrd/Dropbox/Software Projects/ValheimServerCF/ValheimCFTemplate.yml' s3://rickbucket34/

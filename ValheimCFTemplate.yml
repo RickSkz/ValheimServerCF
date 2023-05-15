@@ -1,0 +1,397 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Mappings:
+  ecsOptimizedAmi:
+    us-east-1:
+      AMI: ami-0fbb93b2aa2316ad2
+    us-east-2:
+      AMI: ami-0f2a86c440d116879
+
+
+Parameters:
+  EnvironmentName:
+    Description: Environment Name
+    Type: String
+    Default: ValheimServer
+
+  ValheimSubnetId:
+    Description: Subnet ID
+    Type: String
+    Default: subnet-0698a86eac2e11802
+
+  ValheimSecurityGroupId:
+    Description: Security Group ID
+    Type: String
+    Default: sg-0924f25f3a5a7fb8f
+    
+  KeyPairName:
+    Description: Name for our KeyPair
+    Type: String
+    Default: ValheimKeyPair
+    
+  EIPAllocationID:
+    Description: ID for our elastic IP allocation
+    Type: String
+    Default: eipalloc-0f7072ad171ea21e8
+
+  FileSystemID: 
+    Description: ID for the EFS where we store our Valheim world
+    Type: String
+    Default: fs-0dea2fe3f17e89d01
+
+Resources:
+#IAM Roles
+  ECSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ecs.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: ecs-service
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:AttachNetworkInterface'
+                  - 'ec2:CreateNetworkInterface'
+                  - 'ec2:CreateNetworkInterfacePermission'
+                  - 'ec2:DeleteNetworkInterface'
+                  - 'ec2:DeleteNetworkInterfacePermission'
+                  - 'ec2:Describe*'
+                  - 'ec2:DetachNetworkInterface'
+                  - 'ec2:DescribeInstances'
+                  - 'ec2:TerminateInstances'
+                  - 'ec2:StartInstances'
+                  - 'ec2:RunInstances'
+                  - 'ec2:StopInstances'
+                Resource: '*'
+
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ecs-tasks.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: AmazonECSTaskExecutionRolePolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ecr:GetAuthorizationToken'
+                  - 'ecr:BatchCheckLayerAvailability'
+                  - 'ecr:GetDownloadUrlForLayer'
+                  - 'ecr:BatchGetImage'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ecs-tasks.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: AmazonECSTaskRolePolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:AttachNetworkInterface'
+                  - 'ec2:CreateNetworkInterface'
+                  - 'ec2:CreateNetworkInterfacePermission'
+                  - 'ec2:DeleteNetworkInterface'
+                  - 'ec2:DeleteNetworkInterfacePermission'
+                  - 'ec2:Describe*'
+                  - 'ec2:DetachNetworkInterface'
+                  - 'ec2:DescribeInstances'
+                  - 'ec2:TerminateInstances'
+                  - 'ec2:StartInstances'
+                  - 'ec2:RunInstances'
+                  - 'ec2:StopInstances'
+                  - 'ec2:RequestSpotInstances'
+                  - 'ec2:DescribeSpotInstanceRequests'
+                  - 'ec2:CancelSpotInstanceRequests'
+                  - 'ecs:UpdateService'
+                  - 'ecs:DescribeServices'
+                  - 'ecs:ListContainerInstances'
+                  - 'autoscaling:DescribeAutoScalingGroups'
+                  - 'autoscaling:UpdateAutoScalingGroup'
+                  - 'autoscaling:SetDesiredCapacity'
+                  - 'autoscaling:DescribeAutoScalingInstances'
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                  - 'logs:PutLogEvents'
+                Resource: "*"
+
+
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+      Policies:
+        - PolicyName: service-eip
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:DescribeAddresses'
+                  - 'ec2:AllocateAddress'
+                  - 'ec2:DescribeInstances'
+                  - 'ec2:AssociateAddress'
+                  - 'ec2:AssignPrivateIpAddresses'
+                  - 'ec2:AttachNetworkInterface'
+                Resource: '*'
+
+  ECSServiceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: ecs-service
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'elasticloadbalancing:DeregisterInstancesFromLoadBalancer'
+                  - 'elasticloadbalancing:DeregisterTargets'
+                  - 'elasticloadbalancing:Describe*'
+                  - 'elasticloadbalancing:RegisterInstancesWithLoadBalancer'
+                  - 'elasticloadbalancing:RegisterTargets'
+                  - 'ec2:Describe*'
+                  - 'ec2:AuthorizeSecurityGroupIngress'
+                Resource: '*'
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref EC2Role
+
+#ECS Cluster stuff
+  ECSProxyCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: ValheimProxyCluster
+
+  ECSTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      NetworkMode: bridge 
+      RequiresCompatibilities:
+        - "EC2"
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn   
+      Memory: 250
+      ContainerDefinitions:
+        - Name: ValheimProxyContainer
+          Image: rickskz/valheim-proxy
+          HealthCheck:
+            Command:
+              - "CMD-SHELL"
+              - "curl -f http://127.0.0.1/health || exit 1"
+            Interval: 5
+            Retries: 2
+            Timeout: 3
+          PortMappings:
+            - ContainerPort: 2456
+              HostPort: '2456'
+              Protocol: udp
+
+  ECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !GetAtt ECSProxyCluster.Arn
+      DesiredCount: 1
+      LaunchType: EC2
+      ServiceName: ValheimService
+      TaskDefinition: !Ref ECSTaskDefinition
+
+  ECSInstanceLT:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: ECSInstanceLT
+      LaunchTemplateData:
+        ImageId: 
+          Fn::FindInMap:
+            - ecsOptimizedAmi
+            - Ref: AWS::Region
+            - AMI
+        InstanceType: t3a.nano
+        KeyName: !Ref KeyPairName
+        SecurityGroupIds:
+          - !Ref ValheimSecurityGroupId
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        UserData: 
+          Fn::Base64: !Sub |
+            #!/bin/bash 
+            echo ECS_CLUSTER=${ECSProxyCluster} >> /etc/ecs/ecs.config
+            yum install -y awscli
+            INSTANCE_ID=$(ec2-metadata --instance-id | awk '{print $2}')
+            aws ec2 associate-address --instance-id $INSTANCE_ID --allocation-id ${EIPAllocationID} --allow-reassociation
+            yum install -y aws-cfn-bootstrap
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSAutoScalingGroup --region ${AWS::Region}
+
+  ECSAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchTemplate: 
+          LaunchTemplateId: !Ref ECSInstanceLT
+          Version: !GetAtt ECSInstanceLT.LatestVersionNumber
+      AutoScalingGroupName: ECSAutoScalingGroup
+      MinSize: '0'
+      MaxSize: '1' 
+      DesiredCapacity: '1'
+      VPCZoneIdentifier:
+        - !Ref ValheimSubnetId
+
+
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: ValheimCluster
+
+  ECSServerTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      NetworkMode: bridge 
+      RequiresCompatibilities:
+        - "EC2"
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      Memory: 3800
+      ContainerDefinitions:
+        - Name: ValheimContainer
+          Image: lloesche/valheim-server:latest
+          Environment:
+            - Name: SERVER_NAME
+              Value: RickServer
+            - Name: SERVER_PASS
+              Value: imperio
+            - Name: SERVER_PORT
+              Value: '2456'
+            - Name: SERVER_PUBLIC
+              Value: true
+            - Name: STATUS_HTTP
+              Value: true
+            - Name: STATUS_HTTP_PORT
+              Value: '80'
+            - Name: SUPERVISOR_HTTP
+              Value: true
+            - Name: SUPERVISOR_HTTP_PASS
+              Value: rakghoul
+            - Name: SUPERVISOR_HTTP_PORT
+              Value: '9001'
+            - Name: SUPERVISOR_HTTP_USER
+              Value: admin
+            - Name: WORLD_NAME
+              Value: IMPIValheim 
+          PortMappings:
+            - ContainerPort: 80
+              HostPort: '80'
+              Protocol: tcp
+            - ContainerPort: 9001
+              HostPort: '9001'
+              Protocol: tcp
+            - ContainerPort: 2456
+              HostPort: '2456'
+              Protocol: udp
+            - ContainerPort: 2457
+              HostPort: '2457'
+              Protocol: udp
+            - ContainerPort: 2458
+              HostPort: '2458'
+              Protocol: udp
+          MountPoints:
+            - SourceVolume: TaskDefinitionVolume
+              ContainerPath: /config
+            - SourceVolume: TaskDefinitionVolume
+              ContainerPath: /opt/valheim
+      Volumes:
+        - Name: TaskDefinitionVolume
+          EFSVolumeConfiguration:
+            FilesystemId: !Ref FileSystemID
+
+  ECSServerService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !GetAtt ECSCluster.Arn
+      DesiredCount: 0
+      LaunchType: EC2
+      ServiceName: ValheimServerService
+      TaskDefinition: !Ref ECSServerTaskDefinition
+
+  ECSServerInstanceLT:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: ECSServerInstanceLT
+      LaunchTemplateData:
+        ImageId: 
+          Fn::FindInMap:
+            - ecsOptimizedAmi
+            - Ref: AWS::Region
+            - AMI
+        InstanceType: t3.medium
+        KeyName: !Ref KeyPairName
+        SecurityGroupIds:
+          - !Ref ValheimSecurityGroupId
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        InstanceMarketOptions: 
+          MarketType: spot
+        UserData: 
+          Fn::Base64: !Sub |
+            #!/bin/bash 
+            echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
+            yum install -y awscli
+            INSTANCE_ID=$(ec2-metadata --instance-id | awk '{print $2}')
+            yum install -y aws-cfn-bootstrap
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSServerAutoScalingGroup --region ${AWS::Region}
+
+  ECSServerAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: ECSServerAutoScalingGroup
+      LaunchTemplate: 
+        LaunchTemplateId: !Ref ECSServerInstanceLT
+        Version: !GetAtt ECSServerInstanceLT.LatestVersionNumber
+      MinSize: '0'
+      MaxSize: '1' 
+      DesiredCapacity: '0'
+      VPCZoneIdentifier:
+        - !Ref ValheimSubnetId
+

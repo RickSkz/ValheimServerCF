@@ -1,0 +1,17 @@
+{
+    "name": "valheim_proxy",
+    "version": "1.0.0",
+    "description": "Node.js on Docker",
+    "main": "server.js",
+    "scripts": {
+        "start": "node server.js"
+    },
+    "dependencies": {
+        "@aws-sdk/client-ec2": "^3.238.0",
+        "aws-sdk": "^2.1282.0",
+        "dotenv": "*",
+        "express": "^4.16.1",
+        "node-schedule": "*",
+        "udp-proxy": "^1.2.0"
+    }
+}

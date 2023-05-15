@@ -1,0 +1,25 @@
+#!/bin/bash
+yum update -y
+yum install -y docker
+yum install -y amazon-efs-utils
+systemctl enable docker
+systemctl start docker
+mkdir -p /mnt/efs
+sudo mount -t nfs -o \
+nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport fs-0dea2fe3f17e89d01.efs.us-east-1.amazonaws.com:/   /mnt/efs 
+
+sudo docker run -d \
+    --name valheim-server \
+    --cap-add=sys_nice \
+    --stop-timeout 120 \
+    -p 80:80/tcp \
+    -p 2456-2457:2456-2457/udp \
+    -v /mnt/efs:/config \
+    -v /mnt/efs:/opt/valheim \
+    -e SERVER_NAME="RickServer" \
+    -e WORLD_NAME="IMPIValheim" \
+    -e SERVER_PASS="imperio" \
+    -e SERVER_PUBLIC=true \
+    -e STATUS_HTTP=true \
+    -e STATUS_HTTP_PORT=80 \
+    lloesche/valheim-server

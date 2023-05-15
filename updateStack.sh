@@ -1,0 +1,1 @@
+aws cloudformation update-stack --stack-name ValheimStack --template-url https://rickbucket34.s3.us-east-1.amazonaws.com/ValheimCFTemplate.yml --capabilities CAPABILITY_IAM
